@@ -1,0 +1,8 @@
+flask
+twilio
+openai
+chromadb
+langchain
+langchain-community
+langchain-openai
+python-dotenv

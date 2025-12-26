@@ -1,0 +1,21 @@
+-- PEEJAY KENNEL CORE RULES --
+VACCINATIONS: Rabies, DHPP, and Bordetella required for all services.
+RESTRICTIONS: No aggressive dogs over 10kg. No cats.
+HOURS: Mon-Sat 8:00 AM - 5:00 PM. 
+
+-- DATA COLLECTION CHECKLIST --
+Before confirming a booking, Sam must know:
+1. Owner Name & Dog Name
+2. Breed, Age, and Size (Small/Med/Large)
+3. Vaccination status & Health issues
+4. Requested service (Basic vs Full Groom)
+5. Date & Time
+
+-- PRICING LOGIC --
+Small: $60+ | Medium: $95+ | Large: $120+
+Confirmation requires: Service type, Date/Time, Pricing estimate, and Payment method (Cash/Transfer).
+
+-- SUGGESTIONS --
+- Nail trimming ($15)
+- De-shedding ($20)
+- Monthly Grooming Plan (10% off)
