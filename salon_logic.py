@@ -1,16 +1,17 @@
 import os
-from datetime import datetime
 from openai import OpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 class PeejayBot:
     def __init__(self, data_path):
+        # Use Recursive splitter to keep sentences together for more coherent "facts"
         loader = TextLoader(data_path)
         docs = loader.load()
-        text_splitter = CharacterTextSplitter(chunk_size=600, chunk_overlap=50)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        
         self.vector_db = Chroma.from_documents(
             documents=text_splitter.split_documents(docs), 
             embedding=OpenAIEmbeddings(),
@@ -18,33 +19,40 @@ class PeejayBot:
         )
         self.client = OpenAI()
         
-        # Professional Sam Persona with lead qualification instructions
+        # Sam: The Empathetic Consultant Persona
         self.persona = (
-            "Your name is Sam, the expert coordinator for Peejay Kennel. "
-            "You provide high-end grooming and boarding consultations. "
-            "CONVERSATIONAL STYLE: \n"
-            "1. ACTIVE LISTENING: If a user gives you information, acknowledge it with expertise (e.g., 'A Goldendoodle! They have such specific coat needs.'). \n"
-            "2. CONSULTATIVE SELLING: Use the 'Facts' provided to explain HOW we perform services. If they ask for grooming, briefly explain our process (e.g., our 7-point health check). \n"
-            "3. ONE-BY-ONE EXTRACTION: Never send a numbered list of questions. Look at the 'Known Info' and only ask for the ONE most important missing piece of data next. \n"
-            "4. DYNAMIC FILTERING: If the conversation suggests a dog might be over 10kg and aggressive, pivot the conversation to safety policies immediately. \n"
+            "Your name is Sam, the expert and warm coordinator for Peejay Kennel. "
+            "You are a dog lover first and a professional second. \n\n"
+            "CONVERSATION PHILOSOPHY: \n"
+            "1. EMPATHY & VALIDATION: Always acknowledge user details with warmth. If they mention their dog's breed or age, share an expert, caring insight first (e.g., 'Senior pups are so special' or 'Poodles are so intelligent!'). \n"
+            "2. NO CHECKLISTS: Never send a list of questions. You are having a professional, friendly chat. \n"
+            "3. CONSULTATIVE ADVICE: Use the 'Knowledge Base' to provide value. If they ask about grooming, explain our process and why it benefits their specific dog. \n"
+            "4. ONE-PIECE EXTRACTION: Look at the 'DATA GATHERED SO FAR'. Only ask for the ONE most important missing detail next, woven naturally into the conversation. \n"
+            "5. TONE: Warm, authoritative, empathetic, and never robotic. Avoid phrases like 'Please provide' or 'I need'."
         )
 
     def get_answer(self, user_query, user_info=None, history="", current_time=""):
-        # RAG Retrieval for specific service details (prices, methods, etc.)
+        # Retrieve context from your knowledge_base.txt
         facts = self.vector_db.similarity_search(user_query, k=3)
         context = " ".join([f.page_content for f in facts])
         
-        # This bio tells Sam what is already known so he doesn't repeat questions
-        is_returning = "RETURNING" if user_info and user_info.get('dog_name') else "NEW LEAD"
-        client_bio = f"Current Knowledge: {user_info}. History: {history}"
+        # Contextual summary for the LLM
+        is_returning = "RETURNING CLIENT" if user_info and user_info.get('dog_name') else "NEW LEAD"
+        client_bio = f"Status: {is_returning}. Known Info: {user_info}. Session History: {history}"
 
         response = self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": f"{self.persona}\n\nToday's Date: {current_time}\n\nKnowledge Base: {context}"},
                 {"role": "system", "content": f"DATA GATHERED SO FAR: {client_bio}"},
-                {"role": "user", "content": f"The user just said: '{user_query}'. Respond with expert advice and ask for only ONE missing detail."}
+                {"role": "user", "content": (
+                    f"The user said: '{user_query}'. \n\n"
+                    "Your Task: \n"
+                    "1. Respond with genuine empathy and validation. \n"
+                    "2. Offer a professional consultation tip from the Knowledge Base. \n"
+                    "3. Naturally ask for the ONE next piece of information you need to move toward a booking."
+                )}
             ],
-            temperature=0.7 # Higher temperature allows for more natural, varied speech
+            temperature=0.7 # Higher temperature for natural, human-like variety
         )
         return response.choices[0].message.content
