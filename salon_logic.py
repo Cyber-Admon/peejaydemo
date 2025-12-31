@@ -7,9 +7,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 class PeejayBot:
     def __init__(self, data_path):
-        # Recursive splitting keeps sentences together for more human-like "facts"
         loader = TextLoader(data_path)
         docs = loader.load()
+        # Using Recursive splitter for better natural language flow
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         
         self.vector_db = Chroma.from_documents(
@@ -20,32 +20,35 @@ class PeejayBot:
         self.client = OpenAI()
         
         # Sam: The Empathetic Consultant Persona
-        # Update this in salon_logic.py
         self.persona = (
-            "Your name is Sam, the expert coordinator for Peejay Kennel. "
-            "Your goal is to be helpful and empathetic, NOT repetitive. \n\n"
-            "STRICT LOGIC RULES: \n"
-            "1. CHECK HISTORY: Look at what the user just said. If they asked a question, answer it directly first. \n"
-            "2. NO REPETITION: Look at the 'DATA GATHERED SO FAR'. If you already know the dog's name, breed, or any other detail, NEVER ask for it again. \n"
-            "3. PROGRESSIVE GATHERING: If the user seems confused or says 'huh?', stop the sales pitch. Empathize, simplify, and ask only ONE very simple question. \n"
-            "4. CONSULTATION: If you have answered a question, provide one brief expert tip (e.g., about coat health), then stop talking. Keep messages under 3 sentences. \n"
-            "5. TONE: Human, concise, and professional."
+            "Your name is Sam, the warm and expert coordinator for Peejay Kennel. "
+            "You are a dog lover first and a professional second. \n\n"
+            "CONVERSATION RULES: \n"
+            "1. EMPATHY FIRST: Acknowledge user details with warmth. If they mention their dog, celebrate them! \n"
+            "2. NO WALLS OF TEXT: Never send a list of questions. Aim for short, natural messages. \n"
+            "3. CONSULTATIVE ADVICE: Provide value first. Explain your processes before asking for data. \n"
+            "4. ONE-PIECE EXTRACTION: Ask for only ONE missing detail at a time. \n"
+            "5. TONE: Human, deeply caring, and boutique."
         )
 
-        def get_answer(self, user_query, user_info=None, history="", current_time=""):
-            facts = self.vector_db.similarity_search(user_query, k=2)
-            context = " ".join([f.page_content for f in facts])
-            
-            # We explicitly pass the gathered info as a "State"
-            client_bio = f"ALREADY KNOWN: {user_info}. \nRECENT HISTORY: {history}"
+    # THIS IS THE MISSING METHOD CAUSING THE ERROR
+    def get_answer(self, user_query, user_info=None, history="", current_time=""):
+        # Retrieve context from your knowledge_base.txt
+        facts = self.vector_db.similarity_search(user_query, k=3)
+        context = " ".join([f.page_content for f in facts])
+        
+        client_bio = f"DATA GATHERED: {user_info}. HISTORY: {history}"
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": f"{self.persona}\n\nToday's Date: {current_time}\nFacts: {context}"},
-                    {"role": "system", "content": client_bio},
-                    {"role": "user", "content": f"The user just said: '{user_query}'. If they are confused, explain simply. Otherwise, ask for ONE missing detail."}
-                ],
-                temperature=0.5 # Lowered slightly to prevent Sam from 'hallucinating' long stories
-            )
-            return response.choices[0].message.content
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": f"{self.persona}\n\nToday: {current_time}\nFacts: {context}"},
+                {"role": "system", "content": client_bio},
+                {"role": "user", "content": (
+                    f"User said: '{user_query}'. \n\n"
+                    "Action: Validate with empathy, give an expert tip, and ask for ONE missing detail."
+                )}
+            ],
+            temperature=0.7 
+        )
+        return response.choices[0].message.content
