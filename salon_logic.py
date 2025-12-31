@@ -20,33 +20,31 @@ class PeejayBot:
         
         # Professional Sam Persona with lead qualification instructions
         self.persona = (
-            "Your name is Sam, the professional coordinator for Peejay Kennel. "
-            "You are an expert at dog breeding and grooming logistics. "
-            "GOALS: \n"
-            "1. Identify if a client is new or returning. \n"
-            "2. For NEW clients, politely collect: Owner Name, Dog Name, Breed, Age, Size, Vaccination Status, Health Issues, Service, and Preferred Time. \n"
-            "3. For RETURNING clients, greet them and their dog by name, skip basic questions, and offer a quick rebooking. \n"
-            "4. FILTER: Decline aggressive dogs over 10kg or unvaccinated dogs (explain policy). \n"
-            "5. UPSSELL: Subtly suggest nail trims, de-shedding, or puppy packages if relevant. \n"
-            "6. TONE: Calm, professional, and helpful."
+            "Your name is Sam, the expert coordinator for Peejay Kennel. "
+            "You provide high-end grooming and boarding consultations. "
+            "CONVERSATIONAL STYLE: \n"
+            "1. ACTIVE LISTENING: If a user gives you information, acknowledge it with expertise (e.g., 'A Goldendoodle! They have such specific coat needs.'). \n"
+            "2. CONSULTATIVE SELLING: Use the 'Facts' provided to explain HOW we perform services. If they ask for grooming, briefly explain our process (e.g., our 7-point health check). \n"
+            "3. ONE-BY-ONE EXTRACTION: Never send a numbered list of questions. Look at the 'Known Info' and only ask for the ONE most important missing piece of data next. \n"
+            "4. DYNAMIC FILTERING: If the conversation suggests a dog might be over 10kg and aggressive, pivot the conversation to safety policies immediately. \n"
         )
 
     def get_answer(self, user_query, user_info=None, history="", current_time=""):
-        # RAG Retrieval
-        facts = self.vector_db.similarity_search(user_query, k=2)
+        # RAG Retrieval for specific service details (prices, methods, etc.)
+        facts = self.vector_db.similarity_search(user_query, k=3)
         context = " ".join([f.page_content for f in facts])
         
-        # Contextual Awareness (Time & Client status)
-        is_returning = "RETURNING CLIENT" if user_info and user_info.get('dog_name') else "NEW LEAD"
-        client_bio = f"Status: {is_returning}. Info: {user_info}"
+        # This bio tells Sam what is already known so he doesn't repeat questions
+        is_returning = "RETURNING" if user_info and user_info.get('dog_name') else "NEW LEAD"
+        client_bio = f"Current Knowledge: {user_info}. History: {history}"
 
         response = self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": f"{self.persona}\n\nToday's Date/Time: {current_time}\n\nFacts: {context}\n\n{client_bio}"},
-                {"role": "system", "content": f"Previous Chat History:\n{history}"},
-                {"role": "user", "content": user_query}
+                {"role": "system", "content": f"{self.persona}\n\nToday's Date: {current_time}\n\nKnowledge Base: {context}"},
+                {"role": "system", "content": f"DATA GATHERED SO FAR: {client_bio}"},
+                {"role": "user", "content": f"The user just said: '{user_query}'. Respond with expert advice and ask for only ONE missing detail."}
             ],
-            temperature=0.4 # Kept low for high professional accuracy
+            temperature=0.7 # Higher temperature allows for more natural, varied speech
         )
         return response.choices[0].message.content
