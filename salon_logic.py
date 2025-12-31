@@ -9,7 +9,6 @@ class PeejayBot:
     def __init__(self, data_path):
         loader = TextLoader(data_path)
         docs = loader.load()
-        # Using Recursive splitter for better natural language flow
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         
         self.vector_db = Chroma.from_documents(
@@ -19,36 +18,37 @@ class PeejayBot:
         )
         self.client = OpenAI()
         
-        # Sam: The Empathetic Consultant Persona
         self.persona = (
-            "Your name is Sam, the warm and expert coordinator for Peejay Kennel. "
-            "You are a dog lover first and a professional second. \n\n"
-            "CONVERSATION RULES: \n"
-            "1. EMPATHY FIRST: Acknowledge user details with warmth. If they mention their dog, celebrate them! \n"
-            "2. NO WALLS OF TEXT: Never send a list of questions. Aim for short, natural messages. \n"
-            "3. CONSULTATIVE ADVICE: Provide value first. Explain your processes before asking for data. \n"
-            "4. ONE-PIECE EXTRACTION: Ask for only ONE missing detail at a time. \n"
-            "5. TONE: Human, deeply caring, and boutique."
+            "You are Sam, a professional kennel coordinator. Talk like a real person, not an AI. \n\n"
+            "STRICT RULES: \n"
+            "1. NO REPETITION: Look at 'KNOWN INFO'. If you already have a detail, NEVER ask for it or confirm you are 'excited to learn it' again. \n"
+            "2. DIRECT ANSWERS: If the user gives you a piece of info (like a name), just acknowledge it briefly and move to the next logical question. \n"
+            "3. NO UNSOLICITED ADVICE: Only give a grooming/care tip IF the user asks about a service. If they are just giving you their dog's name, don't give a tip. \n"
+            "4. BREVITY: Keep responses under 40 words. \n"
+            "5. EMPATHY: Be warm, but don't be 'fake' or overly enthusiastic."
         )
 
-    # THIS IS THE MISSING METHOD CAUSING THE ERROR
     def get_answer(self, user_query, user_info=None, history="", current_time=""):
-        # Retrieve context from your knowledge_base.txt
-        facts = self.vector_db.similarity_search(user_query, k=3)
+        facts = self.vector_db.similarity_search(user_query, k=2)
         context = " ".join([f.page_content for f in facts])
         
-        client_bio = f"DATA GATHERED: {user_info}. HISTORY: {history}"
+        # We pass ONLY the last 3 exchanges to prevent context drift
+        short_history = history[-800:]
+        client_state = f"KNOWN INFO: {user_info}. \nHISTORY: {short_history}"
 
         response = self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": f"{self.persona}\n\nToday: {current_time}\nFacts: {context}"},
-                {"role": "system", "content": client_bio},
+                {"role": "system", "content": f"{self.persona}\n\nFacts: {context}"},
+                {"role": "system", "content": client_state},
                 {"role": "user", "content": (
-                    f"User said: '{user_query}'. \n\n"
-                    "Action: Validate with empathy, give an expert tip, and ask for ONE missing detail."
+                    f"User: '{user_query}'. \n\n"
+                    "Instructions: \n"
+                    "1. If info was provided, update your internal checklist. \n"
+                    "2. Do NOT give a tip unless they asked about a service. \n"
+                    "3. Ask for the next missing detail from the checklist (Breed, Age, Size, Vax, Health, Service, Time)."
                 )}
             ],
-            temperature=0.7 
+            temperature=0.3 # Lowered to 0.3 to stop 'creative' unsolicited tips
         )
         return response.choices[0].message.content
