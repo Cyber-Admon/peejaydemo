@@ -20,37 +20,32 @@ class PeejayBot:
         self.client = OpenAI()
         
         # Sam: The Empathetic Consultant Persona
+        # Update this in salon_logic.py
         self.persona = (
-            "Your name is Sam, the warm and expert coordinator for Peejay Kennel. "
-            "You are a dog lover first and a professional second. \n\n"
-            "CONVERSATIONAL STYLE: \n"
-            "1. EMPATHY FIRST: If a user shares a detail, acknowledge it with genuine warmth. If it's a puppy, show excitement; if it's a senior, show extra care. \n"
-            "2. NO CHECKLISTS: Never send a list of questions. You are having a professional, friendly chat. \n"
-            "3. CONSULTATIVE EXPERTISE: Use the 'Knowledge Base' to explain HOW we perform services. Offer expert advice on grooming or boarding based on the dog's needs. \n"
-            "4. ONE-BY-ONE EXTRACTION: Look at 'DATA GATHERED SO FAR'. Only ask for the ONE most important missing detail next, woven naturally into a helpful suggestion. \n"
-            "5. TONE: Warm, authoritative, empathetic, and boutique. Avoid robotic phrases like 'Please provide' or 'I need'."
+            "Your name is Sam, the expert coordinator for Peejay Kennel. "
+            "Your goal is to be helpful and empathetic, NOT repetitive. \n\n"
+            "STRICT LOGIC RULES: \n"
+            "1. CHECK HISTORY: Look at what the user just said. If they asked a question, answer it directly first. \n"
+            "2. NO REPETITION: Look at the 'DATA GATHERED SO FAR'. If you already know the dog's name, breed, or any other detail, NEVER ask for it again. \n"
+            "3. PROGRESSIVE GATHERING: If the user seems confused or says 'huh?', stop the sales pitch. Empathize, simplify, and ask only ONE very simple question. \n"
+            "4. CONSULTATION: If you have answered a question, provide one brief expert tip (e.g., about coat health), then stop talking. Keep messages under 3 sentences. \n"
+            "5. TONE: Human, concise, and professional."
         )
 
-    def get_answer(self, user_query, user_info=None, history="", current_time=""):
-        # Retrieve context from your knowledge_base.txt for consultations
-        facts = self.vector_db.similarity_search(user_query, k=3)
-        context = " ".join([f.page_content for f in facts])
-        
-        # Contextual summary for Sam's brain
-        is_returning = "RETURNING" if user_info and user_info.get('dog_name') else "NEW LEAD"
-        client_bio = f"Current Knowledge: {user_info}. History: {history}"
+        def get_answer(self, user_query, user_info=None, history="", current_time=""):
+            facts = self.vector_db.similarity_search(user_query, k=2)
+            context = " ".join([f.page_content for f in facts])
+            
+            # We explicitly pass the gathered info as a "State"
+            client_bio = f"ALREADY KNOWN: {user_info}. \nRECENT HISTORY: {history}"
 
-        response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": f"{self.persona}\n\nToday's Date: {current_time}\n\nKennel Knowledge: {context}"},
-                {"role": "system", "content": f"DATA GATHERED SO FAR: {client_bio}"},
-                {"role": "user", "content": (
-                    f"The user said: '{user_query}'. \n\n"
-                    "Action: 1. Validate their message with empathy. 2. Provide a professional 'Consultant' tip from the Knowledge Base. "
-                    "3. Naturally ask for ONE missing detail to move the booking forward."
-                )}
-            ],
-            temperature=0.7 # Higher temperature for more natural, varied speech
-        )
-        return response.choices[0].message.content
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": f"{self.persona}\n\nToday's Date: {current_time}\nFacts: {context}"},
+                    {"role": "system", "content": client_bio},
+                    {"role": "user", "content": f"The user just said: '{user_query}'. If they are confused, explain simply. Otherwise, ask for ONE missing detail."}
+                ],
+                temperature=0.5 # Lowered slightly to prevent Sam from 'hallucinating' long stories
+            )
+            return response.choices[0].message.content
